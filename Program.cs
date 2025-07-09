@@ -24,7 +24,8 @@ using (var connection = new SqliteConnection(connectionString))
             PanelCount INTEGER NOT NULL,
             Coordinates TEXT NOT NULL,
             CreatedAt TEXT DEFAULT (datetime('now'))
-        )";
+        );
+        CREATE INDEX IF NOT EXISTS idx_layout_name ON Designs(LayoutName);";
     command.ExecuteNonQuery();
 }
 
