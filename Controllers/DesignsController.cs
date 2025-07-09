@@ -75,6 +75,36 @@ namespace EnergyDesignSimulator.Controllers
             }
         }
 
+        // PUT: api/designs
+        [HttpPut("{layoutName}")]
+        public async Task<IActionResult> UpdateDesign(string layoutName, [FromBody] Design design)
+        {
+            if (!JsonValidator.IsValidJson(design.Coordinates)) return BadRequest("Invalid JSON");
+            if (!ModelState.IsValid || design.PanelCount <= 0 || string.IsNullOrEmpty(design.LayoutName))
+                return BadRequest("Invalid design data");
+
+            try
+            {
+                using (var connection = new SqliteConnection(_connectionString))
+                {
+                    await connection.OpenAsync();
+                    var query = "UPDATE Designs SET PanelCount = @PanelCount, Coordinates = @Coordinates WHERE layoutName = @LayoutName";
+                    using (var command = new SqliteCommand(query, connection))
+                    {   
+                        command.Parameters.AddWithValue("@LayoutName", layoutName);
+                        command.Parameters.AddWithValue("@PanelCount", design.PanelCount);
+                        command.Parameters.AddWithValue("@Coordinates", design.Coordinates);
+                        await command.ExecuteNonQueryAsync();
+                    }
+                }
+                return CreatedAtAction(nameof(GetDesigns), new { id = design.Id }, design);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Error: {ex.Message}");
+            }
+        }
+
         // GET: api/designs/{id}
         [HttpGet("{id}")]
         public async Task<IActionResult> GetDesign(int id)
