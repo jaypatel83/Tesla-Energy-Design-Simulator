@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.Sqlite;
 using EnergyDesignSimulator.Models;
 using System.Text.Json;
+using EnergyDesignSimulator.Utility;
 
 namespace EnergyDesignSimulator.Controllers
 {
@@ -48,6 +49,7 @@ namespace EnergyDesignSimulator.Controllers
         [HttpPost]
         public async Task<IActionResult> CreateDesign([FromBody] Design design)
         {
+            if (!JsonValidator.IsValidJson(design.Coordinates)) return BadRequest("Invalid JSON");
             if (!ModelState.IsValid || design.PanelCount <= 0 || string.IsNullOrEmpty(design.LayoutName))
                 return BadRequest("Invalid design data");
 
