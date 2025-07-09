@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Energy Design Simulator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background: linear-gradient(to bottom, #e5e7eb, #f3f4f6);
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        .card {
+            background: white;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .form-group {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        .form-group label {
+            font-weight: 600;
+            color: #1f2937;
+            width: 120px;
+        }
+        .form-group input, .form-group textarea {
+            flex: 1;
+            padding: 0.5rem;
+            border: 1px solid #d1d5db;
+            border-radius: 0.25rem;
+            font-size: 1rem;
+        }
+        .form-group textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+        .button-group {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        .canvas-container {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 1.5rem;
+        }
+        #canvas {
+            border: 2px solid #1f2937;
+            background: #fff;
+        }
+        #designsList a {
+            color: #2563eb;
+            text-decoration: underline;
+            cursor: pointer;
+        }
+        #designsList a:hover {
+            color: #1e40af;
+        }
+        #error {
+            color: #dc2626;
+            font-weight: 500;
+            margin-top: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <h1 class="text-2xl font-bold text-gray-800 mb-4">Tesla : Energy Design Simulator</h1>
+            <div class="form-group">
+                <label for="layoutName">Layout Name:</label>
+                <input type="text" id="layoutName" class="focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div class="form-group">
+                <label for="panelCount">Panel Count:</label>
+                <input type="number" id="panelCount" class="focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div class="form-group">
+                <label for="coordinates">Coordinates (JSON):</label>
+                <textarea id="coordinates" class="focus:ring-2 focus:ring-blue-500"></textarea>
+            </div>
+            <div class="button-group">
+                <button onclick="saveDesign()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Save Design</button>
+                <button onclick="loadDesigns()" class="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700">Load Designs</button>
+            </div>
+            <div class="canvas-container">
+                <canvas id="canvas" width="400" height="200"></canvas>
+            </div>
+            <div id="designsList" class="text-gray-700"></div>
+            <div id="error"></div>
+        </div>
+    </div>
+
+    <script>
+        async function saveDesign() {
+            const design = {
+                layoutName: document.getElementById("layoutName").value,
+                panelCount: parseInt(document.getElementById("panelCount").value),
+                coordinates: document.getElementById("coordinates").value || '[]'
+            };
+            try {
+                JSON.parse(design.coordinates);
+            } catch (error) {
+                document.getElementById("error").innerText = "Invalid coordinates JSON: " + error.message;
+                return;
+            }
+            try {
+                const response = await fetch('/api/designs', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(design)
+                });
+                if (response.ok) {
+                    alert('Design saved!');
+                    drawDesign(design);
+                    document.getElementById("error").innerText = "";
+                    loadDesigns();
+                } else {
+                    document.getElementById("error").innerText = "Error saving design: " + response.statusText;
+                }
+            } catch (error) {
+                document.getElementById("error").innerText = "Error: " + error.message;
+            }
+        }
+
+        async function loadDesigns() {
+            try {
+                const response = await fetch('/api/designs');
+                if (!response.ok) {
+                    document.getElementById("error").innerText = "Error loading designs: " + response.statusText;
+                    return;
+                }
+                const designs = await response.json();
+                const designsList = document.getElementById("designsList");
+                designsList.innerHTML = '<h2 class="text-lg font-semibold text-gray-800 mb-2">Saved Designs</h2>';
+                if (designs.length === 0) {
+                    designsList.innerHTML += '<p>No designs found.</p>';
+                    return;
+                }
+                designs.forEach((d, index) => {
+                    const escapedCoordinates = JSON.stringify(d.coordinates).replace(/"/g, '"');
+                    designsList.innerHTML += `<p><a href="#" onclick="drawDesignFromList(${index})">${d.layoutName}</a>: ${d.panelCount} panels, Coordinates: ${d.coordinates}</p>`;
+                    window.designs = window.designs || [];
+                    window.designs[index] = d;
+                });
+                if (designs.length > 0) {
+                    drawDesign(designs[0]);
+                }
+            } catch (error) {
+                document.getElementById("error").innerText = "Error loading designs: " + error.message;
+            }
+        }
+
+        function drawDesign(design) {
+            const canvas = document.getElementById("canvas");
+            const ctx = canvas.getContext("2d");
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            document.getElementById("error").innerText = "";
+            try {
+                const coords = JSON.parse(design.coordinates);
+                if (!Array.isArray(coords) || coords.length === 0) {
+                    document.getElementById("error").innerText = "No valid coordinates to draw.";
+                    return;
+                }
+                ctx.fillStyle = "blue";
+                coords.forEach((point, index) => {
+                    if (typeof point.x === 'number' && typeof point.y === 'number') {
+                        const x = Math.min(Math.max(point.x, 0), canvas.width - 10);
+                        const y = Math.min(Math.max(point.y, 0), canvas.height - 10);
+                        ctx.fillRect(x, y, 10, 10);
+                        ctx.fillStyle = "black";
+                        ctx.fillText(`P${index + 1}`, x + 12, y + 10);
+                        ctx.fillStyle = "blue";
+                    } else {
+                        document.getElementById("error").innerText += `Invalid point at index ${index}. `;
+                    }
+                });
+            } catch (error) {
+                document.getElementById("error").innerText = "Invalid coordinates JSON: " + error.message;
+            }
+        }
+
+        function drawDesignFromList(index) {
+            console.log("Drawing design at index:", index, window.designs[index]);
+            if (window.designs && window.designs[index]) {
+                drawDesign(window.designs[index]);
+            } else {
+                document.getElementById("error").innerText = "Error: Design not found at index " + index;
+            }
+        }
+    </script>
+</body>
+</html>
