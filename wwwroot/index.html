@@ -76,7 +76,7 @@
 <body>
     <div class="container">
         <div class="card">
-            <h1 class="text-2xl font-bold text-gray-800 mb-4">Tesla : Energy Design Simulator</h1>
+            <h1 class="text-2xl font-bold text-gray-800 mb-4">Energy Design Simulator</h1>
             <div class="form-group">
                 <label for="layoutName">Layout Name:</label>
                 <input type="text" id="layoutName" class="focus:ring-2 focus:ring-blue-500" />
@@ -166,6 +166,32 @@
             const ctx = canvas.getContext("2d");
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             document.getElementById("error").innerText = "";
+            console.log("Drawing grid and panels for design:", design);
+
+            // Draw 50x50 grid
+            try {
+                ctx.beginPath();
+                ctx.strokeStyle = "#666"; // Darker gray for visibility
+                ctx.lineWidth = 1;
+                // Vertical lines
+                for (let x = 0; x <= canvas.width; x += 50) {
+                    ctx.moveTo(x, 0);
+                    ctx.lineTo(x, canvas.height);
+                    console.log(`Drawing vertical line at x=${x}`);
+                }
+                // Horizontal lines
+                for (let y = 0; y <= canvas.height; y += 50) {
+                    ctx.moveTo(0, y);
+                    ctx.lineTo(canvas.width, y);
+                    console.log(`Drawing horizontal line at y=${y}`);
+                }
+                ctx.stroke();
+                console.log("Grid drawn");
+            } catch (error) {
+                document.getElementById("error").innerText = "Grid drawing error: " + error.message;
+            }
+
+            // Draw panels
             try {
                 const coords = JSON.parse(design.coordinates);
                 if (!Array.isArray(coords) || coords.length === 0) {
@@ -181,6 +207,7 @@
                         ctx.fillStyle = "black";
                         ctx.fillText(`P${index + 1}`, x + 12, y + 10);
                         ctx.fillStyle = "blue";
+                        console.log(`Drawing panel ${index + 1} at (${x}, ${y})`);
                     } else {
                         document.getElementById("error").innerText += `Invalid point at index ${index}. `;
                     }
