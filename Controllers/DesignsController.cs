@@ -10,6 +10,7 @@ namespace EnergyDesignSimulator.Controllers
     public class DesignsController : ControllerBase
     {
         private readonly string _connectionString;
+        private static readonly object _lock = new object(); // Lock object for concurrency
 
         public DesignsController(IConfiguration configuration)
         {
@@ -53,16 +54,28 @@ namespace EnergyDesignSimulator.Controllers
 
             try
             {
-                using (var connection = new SqliteConnection(_connectionString))
+                JsonSerializer.Deserialize<object>(design.Coordinates); // Validate JSON
+            }
+            catch (JsonException)
+            {
+                return BadRequest("Invalid JSON coordinates");
+            }
+
+            try
+            {
+                lock (_lock) // Synchronize database write
                 {
-                    await connection.OpenAsync();
-                    var query = "INSERT INTO Designs (LayoutName, PanelCount, Coordinates) VALUES (@LayoutName, @PanelCount, @Coordinates)";
-                    using (var command = new SqliteCommand(query, connection))
+                    using (var connection = new SqliteConnection(_connectionString))
                     {
-                        command.Parameters.AddWithValue("@LayoutName", design.LayoutName);
-                        command.Parameters.AddWithValue("@PanelCount", design.PanelCount);
-                        command.Parameters.AddWithValue("@Coordinates", design.Coordinates);
-                        await command.ExecuteNonQueryAsync();
+                        connection.Open(); // Synchronous for lock scope
+                        var query = "INSERT INTO Designs (LayoutName, PanelCount, Coordinates) VALUES (@LayoutName, @PanelCount, @Coordinates)";
+                        using (var command = new SqliteCommand(query, connection))
+                        {
+                            command.Parameters.AddWithValue("@LayoutName", design.LayoutName);
+                            command.Parameters.AddWithValue("@PanelCount", design.PanelCount);
+                            command.Parameters.AddWithValue("@Coordinates", design.Coordinates);
+                            command.ExecuteNonQuery(); // Synchronous for lock scope
+                        }
                     }
                 }
                 return CreatedAtAction(nameof(GetDesigns), new { id = design.Id }, design);
@@ -102,6 +115,59 @@ namespace EnergyDesignSimulator.Controllers
                 }
             }
             return NotFound();
+        }
+
+        // PUT: api/designs/{id}
+        [HttpPut("{id}")]
+        public async Task<IActionResult> UpdateDesign(int id, [FromBody] Design design)
+        {
+            if (!ModelState.IsValid || design.PanelCount <= 0 || string.IsNullOrEmpty(design.LayoutName))
+                return BadRequest("Invalid design data");
+
+            try
+            {
+                JsonSerializer.Deserialize<object>(design.Coordinates);
+            }
+            catch (JsonException)
+            {
+                return BadRequest("Invalid JSON coordinates");
+            }
+
+            try
+            {
+                using (var connection = new SqliteConnection(_connectionString))
+                {
+                    await connection.OpenAsync();
+                    var checkQuery = "SELECT COUNT(*) FROM Designs WHERE Id = @Id";
+                    using (var checkCommand = new SqliteCommand(checkQuery, connection))
+                    {
+                        checkCommand.Parameters.AddWithValue("@Id", id);
+                        var count = Convert.ToInt32(await checkCommand.ExecuteScalarAsync());
+                        if (count == 0)
+                            return NotFound($"Design with ID {id} not found");
+                    }
+
+                    var query = @"
+                        UPDATE Designs 
+                        SET LayoutName = @LayoutName, PanelCount = @PanelCount, Coordinates = @Coordinates
+                        WHERE Id = @Id";
+                    using (var command = new SqliteCommand(query, connection))
+                    {
+                        command.Parameters.AddWithValue("@Id", id);
+                        command.Parameters.AddWithValue("@LayoutName", design.LayoutName);
+                        command.Parameters.AddWithValue("@PanelCount", design.PanelCount);
+                        command.Parameters.AddWithValue("@Coordinates", design.Coordinates);
+                        var rowsAffected = await command.ExecuteNonQueryAsync();
+                        if (rowsAffected == 0)
+                            return StatusCode(500, "Failed to update design");
+                    }
+                }
+                return NoContent();
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Error: {ex.Message}");
+            }
         }
     }
 }
