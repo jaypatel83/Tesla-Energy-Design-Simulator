@@ -76,7 +76,7 @@
 <body>
     <div class="container">
         <div class="card">
-            <h1 class="text-2xl font-bold text-gray-800 mb-4">Tesla : Energy Design Simulator</h1>
+            <h1 class="text-2xl font-bold text-gray-800 mb-4">Energy Design Simulator</h1>
             <div class="form-group">
                 <label for="layoutName">Layout Name:</label>
                 <input type="text" id="layoutName" class="focus:ring-2 focus:ring-blue-500" />
@@ -89,9 +89,14 @@
                 <label for="coordinates">Coordinates (JSON):</label>
                 <textarea id="coordinates" class="focus:ring-2 focus:ring-blue-500"></textarea>
             </div>
+            <div class="form-group">
+                <label for="circleCount">Circles (Radial):</label>
+                <input type="number" id="circleCount" min="1" max="5" value="1" class="focus:ring-2 focus:ring-blue-500" />
+            </div>
             <div class="button-group">
                 <button onclick="saveDesign()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Save Design</button>
                 <button onclick="loadDesigns()" class="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700">Load Designs</button>
+                <button onclick="generateRadialLayout()" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">Generate Radial Layout</button>
             </div>
             <div class="canvas-container">
                 <canvas id="canvas" width="400" height="200"></canvas>
@@ -161,11 +166,69 @@
             }
         }
 
+        function generateRadialLayout() {
+            const circleCount = parseInt(document.getElementById("circleCount").value);
+            if (!circleCount || circleCount < 1 || circleCount > 5) {
+                document.getElementById("error").innerText = "Circle count must be between 1 and 5.";
+                return;
+            }
+            const centerX = 200; // Canvas center
+            const centerY = 100;
+            const baseRadius = 50; // Starting radius
+            const radiusStep = 50; // Distance between circles
+            const panelsPerCircle = 10; // Panels per circle
+            const coords = [];
+
+            for (let i = 0; i < circleCount; i++) {
+                const radius = baseRadius + i * radiusStep;
+                for (let j = 0; j < panelsPerCircle; j++) {
+                    const angle = (j / panelsPerCircle) * 2 * Math.PI;
+                    const x = centerX + radius * Math.cos(angle);
+                    const y = centerY + radius * Math.sin(angle);
+                    coords.push({ x: Math.round(x), y: Math.round(y) });
+                }
+            }
+
+            const design = {
+                layoutName: `RadialLayout_${circleCount}_Circles`,
+                panelCount: circleCount * panelsPerCircle,
+                coordinates: JSON.stringify(coords)
+            };
+            document.getElementById("layoutName").value = design.layoutName;
+            document.getElementById("panelCount").value = design.panelCount;
+            document.getElementById("coordinates").value = design.coordinates;
+            drawDesign(design);
+        }
+
         function drawDesign(design) {
             const canvas = document.getElementById("canvas");
             const ctx = canvas.getContext("2d");
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             document.getElementById("error").innerText = "";
+            console.log("Drawing grid and panels for design:", design);
+
+            // Draw 50x50 grid
+            try {
+                ctx.beginPath();
+                ctx.strokeStyle = "#666";
+                ctx.lineWidth = 1;
+                for (let x = 0; x <= canvas.width; x += 50) {
+                    ctx.moveTo(x, 0);
+                    ctx.lineTo(x, canvas.height);
+                    console.log(`Drawing vertical line at x=${x}`);
+                }
+                for (let y = 0; y <= canvas.height; y += 50) {
+                    ctx.moveTo(0, y);
+                    ctx.lineTo(canvas.width, y);
+                    console.log(`Drawing horizontal line at y=${y}`);
+                }
+                ctx.stroke();
+                console.log("Grid drawn");
+            } catch (error) {
+                document.getElementById("error").innerText = "Grid drawing error: " + error.message;
+            }
+
+            // Draw panels
             try {
                 const coords = JSON.parse(design.coordinates);
                 if (!Array.isArray(coords) || coords.length === 0) {
@@ -181,6 +244,7 @@
                         ctx.fillStyle = "black";
                         ctx.fillText(`P${index + 1}`, x + 12, y + 10);
                         ctx.fillStyle = "blue";
+                        console.log(`Drawing panel ${index + 1} at (${x}, ${y})`);
                     } else {
                         document.getElementById("error").innerText += `Invalid point at index ${index}. `;
                     }
